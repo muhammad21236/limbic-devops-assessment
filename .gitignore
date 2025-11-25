@@ -1,0 +1,165 @@
+# Git ignore file for Limbic Capital DevOps Assessment
+
+# ============================================================================
+# Secrets and Credentials - NEVER COMMIT THESE!
+# ============================================================================
+
+# Environment variables
+.env
+*.env
+.env.*
+!.env.example
+
+# SSH keys
+*.pem
+*.key
+*.pub
+id_rsa*
+id_ed25519*
+
+# Cloudflare credentials
+cloudflare/*.json
+cloudflare/*credentials*.json
+cloudflare/*.pem
+!cloudflare/*.example
+
+# Certificates
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# Secrets
+secrets/
+*.secret
+.secrets
+
+# ============================================================================
+# Backups
+# ============================================================================
+
+backups/
+*.backup
+*.bak
+*.tar.gz
+*.zip
+*.sql
+*.dump
+
+# ============================================================================
+# Logs
+# ============================================================================
+
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============================================================================
+# OS Files
+# ============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ============================================================================
+# Editor Files
+# ============================================================================
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+
+# Vim
+*.swp
+*.swo
+*~
+.*.sw?
+
+# Sublime
+*.sublime-project
+*.sublime-workspace
+
+# ============================================================================
+# Node.js
+# ============================================================================
+
+node_modules/
+npm-debug.log
+yarn.lock
+package-lock.json
+.npm/
+.yarn/
+
+# ============================================================================
+# Python
+# ============================================================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ============================================================================
+# Docker
+# ============================================================================
+
+# Don't ignore Dockerfiles, but ignore build artifacts
+docker-compose.override.yml
+.dockerignore
+
+# ============================================================================
+# Terraform (if used)
+# ============================================================================
+
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+*.tfvars
+!*.tfvars.example
+
+# ============================================================================
+# Temporary Files
+# ============================================================================
+
+tmp/
+temp/
+*.tmp
+*.cache
+
+# ============================================================================
+# System and Process Files
+# ============================================================================
+
+*.pid
+*.seed
+*.pid.lock
+.build/
+dist/

@@ -1,0 +1,103 @@
+# ============================================================================
+# Cloudflare Tunnel Configuration
+# ============================================================================
+# This configuration file defines how cloudflared routes traffic from
+# Cloudflare's edge to your local services running in Docker containers.
+#
+# IMPORTANT: Replace placeholder values with your actual configuration:
+# - YOUR_TUNNEL_ID: Found in Cloudflare Zero Trust dashboard
+# - YOUR_TUNNEL_CREDENTIALS_FILE: Path to your tunnel credentials JSON
+# - YOUR_DOMAIN: Your actual domain name
+#
+# Copy this file to /etc/cloudflared/config.yml on the app-host container
+# ============================================================================
+
+# Tunnel ID from Cloudflare Zero Trust dashboard
+tunnel: YOUR_TUNNEL_ID
+
+# Path to tunnel credentials file
+credentials-file: /etc/cloudflared/YOUR_TUNNEL_ID.json
+
+# ============================================================================
+# Ingress Rules
+# ============================================================================
+# Define how traffic is routed from Cloudflare to your applications
+# Rules are evaluated top-to-bottom; first match wins
+
+ingress:
+  # Route app1.example.com to App 1 (Node.js web app)
+  - hostname: app1.YOUR_DOMAIN.com
+    service: http://localhost:3000
+    originRequest:
+      connectTimeout: 30s
+      noTLSVerify: false
+      disableChunkedEncoding: false
+      bastionMode: false
+      proxyType: ""
+      http2Origin: false
+
+  # Route app2.example.com to App 2 (Python Flask API)
+  # This endpoint is protected by Cloudflare Access
+  - hostname: app2.YOUR_DOMAIN.com
+    service: http://localhost:5000
+    originRequest:
+      connectTimeout: 30s
+      noTLSVerify: false
+      disableChunkedEncoding: false
+      bastionMode: false
+      proxyType: ""
+      http2Origin: false
+
+  # Catch-all rule (required)
+  # This returns a 404 for any hostname not explicitly configured
+  - service: http_status:404
+
+# ============================================================================
+# Tunnel Configuration
+# ============================================================================
+
+# Metrics server for monitoring (optional)
+# Access metrics at http://localhost:2000/metrics
+metrics: localhost:2000
+
+# Log level: debug, info, warn, error, fatal
+loglevel: info
+
+# Transport protocol
+protocol: quic
+
+# Number of connections to maintain
+# Recommended: 4 (default)
+# Increase for high-traffic scenarios
+# ha-connections: 4
+
+# Autoupdate interval (optional)
+# Set to 0 to disable
+# autoupdate-freq: 24h
+
+# Graceful shutdown timeout
+grace-period: 30s
+
+# Retry connection to Cloudflare (seconds)
+retries: 5
+
+# ============================================================================
+# Notes
+# ============================================================================
+# 
+# 1. Service URLs use 'localhost' because cloudflared runs in the same
+#    container as Docker, and Docker services are exposed to localhost
+#
+# 2. No need to expose ports publicly - everything goes through tunnel
+#
+# 3. After editing this file, restart cloudflared:
+#    systemctl restart cloudflared
+#
+# 4. Check tunnel status:
+#    systemctl status cloudflared
+#    cloudflared tunnel info YOUR_TUNNEL_ID
+#
+# 5. View logs:
+#    journalctl -u cloudflared -f
+#
+# ============================================================================

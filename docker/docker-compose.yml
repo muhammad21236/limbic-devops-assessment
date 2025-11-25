@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # App 1: Node.js Web Application
+  # ============================================================================
+  app1:
+    build:
+      context: ./app1
+      dockerfile: Dockerfile
+    container_name: app1
+    restart: unless-stopped
+    ports:
+      - "3000:3000"  # Exposed to container localhost only
+    networks:
+      - internal_net
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - APP2_URL=http://app2:5000
+      - LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.limbic.app=app1"
+      - "com.limbic.environment=production"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+  # ============================================================================
+  # App 2: Python Flask API
+  # ============================================================================
+  app2:
+    build:
+      context: ./app2
+      dockerfile: Dockerfile
+    container_name: app2
+    restart: unless-stopped
+    ports:
+      - "5000:5000"  # Exposed to container localhost only
+    networks:
+      - internal_net
+    environment:
+      - FLASK_ENV=production
+      - FLASK_APP=app.py
+      - LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.limbic.app=app2"
+      - "com.limbic.environment=production"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  internal_net:
+    driver: bridge
+    name: internal_net
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+    labels:
+      - "com.limbic.network=internal"

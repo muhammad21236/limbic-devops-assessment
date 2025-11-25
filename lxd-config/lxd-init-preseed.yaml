@@ -1,0 +1,33 @@
+config:
+  core.https_address: "[::]:8443"
+  core.trust_password: ""
+networks:
+  - config:
+      ipv4.address: 10.10.10.1/24
+      ipv4.nat: "true"
+      ipv4.dhcp: "true"
+      ipv4.dhcp.ranges: 10.10.10.100-10.10.10.200
+      ipv6.address: none
+    description: "Limbic Capital network bridge"
+    name: lxdbr0
+    type: bridge
+storage_pools:
+  - config:
+      size: 50GiB
+    description: "Limbic Capital storage pool"
+    name: limbic-pool
+    driver: zfs
+profiles:
+  - config: {}
+    description: "Default LXD profile"
+    devices:
+      eth0:
+        name: eth0
+        network: lxdbr0
+        type: nic
+      root:
+        path: /
+        pool: limbic-pool
+        type: disk
+    name: default
+cluster: null
