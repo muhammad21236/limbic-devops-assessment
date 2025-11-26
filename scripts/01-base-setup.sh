@@ -289,7 +289,7 @@ echo "  ✅ Kernel parameters configured"
 
 echo ""
 echo "🔄 Restarting SSH service..."
-systemctl restart sshd
+systemctl restart ssh
 echo "  ✅ SSH service restarted"
 
 # ==============================================================================

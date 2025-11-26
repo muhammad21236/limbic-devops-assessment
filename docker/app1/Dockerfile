@@ -23,20 +23,20 @@ FROM node:18-alpine
 # Install curl for healthcheck
 RUN apk add --no-cache curl
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+# Create non-root user (commented out for LXD compatibility)
+# RUN addgroup -g 1001 -S nodejs && \
+#     adduser -S nodejs -u 1001
 
 # Set working directory
 WORKDIR /app
 
 # Copy dependencies and source from builder
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nodejs:nodejs /app/src ./src
-COPY --chown=nodejs:nodejs package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/src ./src
+COPY package*.json ./
 
-# Switch to non-root user
-USER nodejs
+# Switch to non-root user (commented out for LXD compatibility)
+# USER nodejs
 
 # Expose port
 EXPOSE 3000

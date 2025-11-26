@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # ============================================================================
@@ -11,7 +11,7 @@ services:
     container_name: app1
     restart: unless-stopped
     ports:
-      - "3000:3000"  # Exposed to container localhost only
+      - "3000:3000" # Exposed to container localhost only
     networks:
       - internal_net
     environment:
@@ -28,12 +28,13 @@ services:
     labels:
       - "com.limbic.app=app1"
       - "com.limbic.environment=production"
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
+    # Simplified security for LXD environment
+    # security_opt:
+    #   - no-new-privileges:true
+    # cap_drop:
+    #   - ALL
+    # cap_add:
+    #   - NET_BIND_SERVICE
 
   # ============================================================================
   # App 2: Python Flask API
@@ -45,7 +46,7 @@ services:
     container_name: app2
     restart: unless-stopped
     ports:
-      - "5000:5000"  # Exposed to container localhost only
+      - "5000:5000" # Exposed to container localhost only
     networks:
       - internal_net
     environment:
@@ -61,12 +62,13 @@ services:
     labels:
       - "com.limbic.app=app2"
       - "com.limbic.environment=production"
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    cap_add:
-      - NET_BIND_SERVICE
+    # Simplified security for LXD environment
+    # security_opt:
+    #   - no-new-privileges:true
+    # cap_drop:
+    #   - ALL
+    # cap_add:
+    #   - NET_BIND_SERVICE
 
 # ============================================================================
 # Networks

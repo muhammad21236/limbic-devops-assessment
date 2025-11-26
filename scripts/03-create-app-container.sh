@@ -72,13 +72,69 @@ fi
 echo ""
 echo "🚀 Launching container: $CONTAINER_NAME"
 
-lxc launch $CONTAINER_IMAGE $CONTAINER_NAME
+# Launch container (explicitly as container, not VM)
+lxc launch $CONTAINER_IMAGE $CONTAINER_NAME --vm=false
 
 echo "  ⏳ Waiting for container to be ready..."
+
+# Wait for container to be in RUNNING state
+for i in {1..30}; do
+    STATE=$(lxc list $CONTAINER_NAME --format csv --columns s 2>/dev/null | head -n1)
+    if [ "$STATE" = "RUNNING" ]; then
+        echo "  ✅ Container is running"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "  ❌ Container failed to start after 60 seconds"
+        lxc info $CONTAINER_NAME
+        exit 1
+    fi
+    sleep 2
+done
+
+# Give it a moment to settle
 sleep 5
 
-# Wait for container to be fully started
-lxc exec $CONTAINER_NAME -- cloud-init status --wait || true
+# Try to execute a simple command to verify container is responsive
+echo "  🔍 Checking if container is responsive..."
+RESPONSIVE=false
+for i in {1..20}; do
+    if lxc exec $CONTAINER_NAME --force-noninteractive -- /bin/sh -c "echo ready" &>/dev/null; then
+        echo "  ✅ Container is responsive"
+        RESPONSIVE=true
+        break
+    fi
+    # Show progress every 5 attempts
+    if [ $((i % 5)) -eq 0 ]; then
+        echo "  ⏳ Still waiting... (attempt $i/20)"
+    fi
+    sleep 3
+done
+
+if [ "$RESPONSIVE" = "false" ]; then
+    echo "  ⚠️  Container not responding normally, trying alternative approach..."
+    # Sometimes the container needs a restart to become responsive
+    lxc restart $CONTAINER_NAME
+    sleep 10
+    
+    for i in {1..10}; do
+        if lxc exec $CONTAINER_NAME --force-noninteractive -- /bin/sh -c "echo ready" &>/dev/null; then
+            echo "  ✅ Container is now responsive after restart"
+            RESPONSIVE=true
+            break
+        fi
+        sleep 3
+    done
+    
+    if [ "$RESPONSIVE" = "false" ]; then
+        echo "  ❌ Container failed to become responsive"
+        echo "  ℹ️  Container info:"
+        lxc info $CONTAINER_NAME
+        echo "  ℹ️  Container logs:"
+        lxc console $CONTAINER_NAME --show-log | tail -20
+        exit 1
+    fi
+fi
 
 echo "  ✅ Container launched"
 
@@ -103,6 +159,10 @@ echo "  🔄 Restarting container to apply settings..."
 lxc restart $CONTAINER_NAME
 sleep 5
 
+# Wait for network connectivity
+echo "  ⏳ Waiting for network connectivity..."
+sleep 5
+
 # ==============================================================================
 # Configure Static IP
 # ==============================================================================
@@ -110,14 +170,66 @@ sleep 5
 echo ""
 echo "🌐 Configuring static IP: $STATIC_IP"
 
-# Set static IP on eth0 device
-lxc config device override $CONTAINER_NAME eth0 ipv4.address=$STATIC_IP
+# Stop container before network reconfiguration
+lxc stop $CONTAINER_NAME
 
-# Restart container to apply network settings
-lxc restart $CONTAINER_NAME
+# Remove default eth0 and add with static IP
+lxc config device remove $CONTAINER_NAME eth0 2>/dev/null || true
+lxc config device add $CONTAINER_NAME eth0 nic \
+    nictype=bridged \
+    parent=lxdbr0 \
+    name=eth0
+
+# Start container
+lxc start $CONTAINER_NAME
+sleep 10
+
+# Configure IP manually inside the container using netplan
+echo "  ⏳ Configuring network with netplan..."
+lxc exec $CONTAINER_NAME -- bash -c 'cat > /etc/netplan/10-lxc.yaml << EOF
+network:
+  version: 2
+  ethernets:
+    eth0:
+      addresses:
+        - 10.10.10.100/24
+      routes:
+        - to: default
+          via: 10.10.10.1
+      nameservers:
+        addresses:
+          - 8.8.8.8
+          - 8.8.4.4
+EOF'
+
+# Fix permissions to avoid warnings
+lxc exec $CONTAINER_NAME -- chmod 600 /etc/netplan/10-lxc.yaml
+
+# Apply netplan configuration (suppress warnings)
+lxc exec $CONTAINER_NAME -- netplan apply 2>/dev/null || true
+
+# Ensure DNS is properly configured (systemd-resolved can interfere)
+echo "  ⏳ Configuring DNS..."
+lxc exec $CONTAINER_NAME -- bash -c 'rm -f /etc/resolv.conf'
+lxc exec $CONTAINER_NAME -- bash -c 'cat > /etc/resolv.conf << EOF
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+EOF'
+lxc exec $CONTAINER_NAME -- bash -c 'chattr +i /etc/resolv.conf 2>/dev/null || true'
+
+# Wait for network to be ready
+echo "  ⏳ Waiting for network interface..."
 sleep 5
+for i in {1..15}; do
+    IP=$(lxc exec $CONTAINER_NAME -- ip -4 addr show eth0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' || echo "")
+    if [ -n "$IP" ]; then
+        echo "  ✅ Static IP configured: $IP"
+        break
+    fi
+    sleep 2
+done
 
-echo "  ✅ Static IP configured"
+echo "  ✅ Network configured"
 
 # Verify IP address
 ACTUAL_IP=$(lxc list $CONTAINER_NAME --format csv -c 4 | cut -d' ' -f1)
@@ -155,6 +267,71 @@ fi
 
 echo ""
 echo "🐳 Installing Docker in container..."
+
+# Test network connectivity before proceeding
+echo "  🔍 Testing network connectivity..."
+NETWORK_OK=false
+
+# First verify DNS resolution works
+echo "  🔍 Testing DNS resolution..."
+if lxc exec $CONTAINER_NAME -- nslookup google.com 8.8.8.8 &>/dev/null; then
+    echo "  ✅ DNS resolution working"
+    NETWORK_OK=true
+else
+    echo "  ❌ DNS resolution failed"
+    echo ""
+    echo "  🔧 Attempting to fix DNS and routing..."
+    
+    # Check if MASQUERADE rule exists for LXD network
+    if ! sudo iptables -t nat -L POSTROUTING -n | grep -q "MASQUERADE.*10.10.10.0"; then
+        echo "  ⚠️  No NAT MASQUERADE rule found - adding now..."
+        
+        # Add MASQUERADE rule for LXD bridge
+        sudo iptables -t nat -A POSTROUTING -s 10.10.10.0/24 ! -d 10.10.10.0/24 -j MASQUERADE
+        
+        # Allow forwarding from LXD bridge
+        sudo iptables -I FORWARD 1 -i lxdbr0 -j ACCEPT
+        sudo iptables -I FORWARD 1 -o lxdbr0 -j ACCEPT
+        
+        # Enable IP forwarding on host
+        echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward > /dev/null
+        
+        echo "  ✅ NAT rules added"
+        
+        # Show the new rules
+        echo "  ℹ️  Verifying NAT rules:"
+        sudo iptables -t nat -L POSTROUTING -n -v
+        sleep 3
+    else
+        echo "  ℹ️  MASQUERADE rule already exists"
+    fi
+    
+    # Ensure LXD bridge has NAT enabled in config
+    lxc network set lxdbr0 ipv4.nat true 2>/dev/null || true
+    lxc network set lxdbr0 ipv4.firewall true 2>/dev/null || true
+    
+    # Try DNS resolution again
+    if lxc exec $CONTAINER_NAME -- nslookup google.com 8.8.8.8 &>/dev/null; then
+        echo "  ✅ DNS now working after fixes"
+        NETWORK_OK=true
+    else
+        echo "  ⚠️  DNS still not working - will try to continue"
+    fi
+fi
+
+if [ "$NETWORK_OK" = "false" ]; then
+    echo ""
+    echo "  ℹ️  Network diagnostics:"
+    echo "  --- Container IP ---"
+    lxc exec $CONTAINER_NAME -- ip addr show eth0
+    echo "  --- Container Routes ---"
+    lxc exec $CONTAINER_NAME -- ip route
+    echo "  --- Container DNS ---"
+    lxc exec $CONTAINER_NAME -- cat /etc/resolv.conf
+    echo "  --- Host iptables NAT rules ---"
+    sudo iptables -t nat -L -n | grep -A5 "Chain POSTROUTING"
+    echo ""
+fi
 
 # Update package list
 lxc exec $CONTAINER_NAME -- apt-get update

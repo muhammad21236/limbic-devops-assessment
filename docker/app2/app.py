@@ -312,7 +312,12 @@ def print_banner():
     print(f"Environment: {FLASK_ENV}")
     print(f"Port: {PORT}")
     print(f"Python: {sys.version.split()[0]}")
-    print(f"Flask: {Flask.__version__}")
+    try:
+        import flask
+
+        print(f"Flask: {flask.__version__}")
+    except:
+        print("Flask: (version unavailable)")
     print(f"Started: {datetime.utcnow().isoformat()}Z")
     print("=" * 60)
     print("Available endpoints:")

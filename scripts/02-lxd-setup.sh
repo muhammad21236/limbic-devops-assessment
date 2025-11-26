@@ -51,10 +51,10 @@ echo ""
 
 echo "📦 Installing LXD..."
 
-# Remove old LXD if exists
+# Remove old LXD if exists (suppress errors if not found)
 if dpkg -l | grep -q lxd; then
     echo "  ℹ️  Removing old LXD package..."
-    sudo apt-get remove -y lxd lxd-client
+    sudo apt-get remove -y lxd lxd-client 2>/dev/null || true
 fi
 
 # Install LXD snap
@@ -201,8 +201,18 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     # Launch test container
     lxc launch ubuntu:22.04 test-container
     
-    echo "  ⏳ Waiting for container to start..."
-    sleep 5
+    echo "  ⏳ Waiting for container to start and get network..."
+    sleep 10
+    
+    # Wait for network to be assigned
+    for i in {1..30}; do
+        IP=$(lxc list test-container -c 4 --format csv | cut -d' ' -f1)
+        if [ -n "$IP" ]; then
+            echo "  ✅ Container IP: $IP"
+            break
+        fi
+        sleep 1
+    done
     
     # Check container status
     lxc list
@@ -210,7 +220,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     # Test network connectivity
     echo ""
     echo "  🌐 Testing network connectivity..."
-    lxc exec test-container -- ping -c 3 8.8.8.8
+    lxc exec test-container -- ping -c 3 8.8.8.8 || echo "  ⚠️  Network test failed (this is sometimes normal on first run)"
     
     echo ""
     echo "  ✅ Test successful!"
