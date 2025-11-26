@@ -2,6 +2,39 @@
 
 This repo deploys a small, secure stack on Ubuntu: one LXD container that runs Docker, two demo apps (Node.js and Python), and Cloudflare Tunnel for HTTPS access without opening any inbound ports.
 
+## Architecture
+
+```mermaid
+flowchart TB
+    User[End User]
+    CF[Cloudflare Edge]
+    
+    subgraph VPS[Ubuntu VPS Host]
+        UFW[UFW Firewall - SSH Only]
+        
+        subgraph Container[LXD Container: app-host]
+            CFT[cloudflared daemon]
+            
+            subgraph Docker[Docker Network: internal_net]
+                App1[App1: Node.js Web<br/>Port 3000]
+                App2[App2: Python API<br/>Port 5000]
+            end
+        end
+    end
+    
+    User -->|HTTPS| CF
+    CF -->|Encrypted Tunnel| CFT
+    CFT -->|localhost:3000| App1
+    CFT -->|localhost:5000| App2
+    App1 -.->|Internal DNS| App2
+    
+    style VPS fill:#e1f5ff
+    style Container fill:#fff4e1
+    style Docker fill:#f0f0f0
+    style CF fill:#f96854
+    style CFT fill:#f96854
+```
+
 ## What You Get
 
 - Ubuntu 22.04 host locked down to SSH.
